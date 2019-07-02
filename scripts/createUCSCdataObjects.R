@@ -44,7 +44,6 @@ createRefSeqObjects('macFas5', 'annotations/geneReferences/June2019/macFas5.refG
 createRefSeqObjects('canFam3.humanXeno', 'annotations/geneReferences/June2019/canFam3.xenoRefGene.txt.gz', humanGeneFilter = TRUE)
 createRefSeqObjects('macFas5.humanXeno', 'annotations/geneReferences/June2019/macFas5.xenoRefGene.txt.gz', humanGeneFilter = TRUE)
 
-
 # Create human oreganno gene regulation GRanges object.
 d <- read.table('annotations/regulation/June2019/hg38.oreganno.txt.gz', header = FALSE)
 hg38.oreganno <- GenomicRanges::makeGRangesFromDataFrame(d, seqnames.field = 'V2', start.field = 'V3',

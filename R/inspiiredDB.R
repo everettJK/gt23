@@ -20,7 +20,7 @@ getPatientRunDetails <- function(patients, specimenManagementDBgroup='specimen_m
   GTSPs <- unique(unname(unlist(DBI::dbGetQuery(dbConn1, query))))
 
   # Retrieve run ids
-  query <- paste('select miseqid from samples where sampleName like ', paste(sQuote(paste0(GTSPs, '-%')), collapse=' or sampleName like '))
+  queryRetrievepaste('select miseqid from samples where sampleName like ', paste(sQuote(paste0(GTSPs, '-%')), collapse=' or sampleName like '))
   runIDs <- unique(unname(unlist(DBI::dbGetQuery(dbConn2, query))))
 
   DBI::dbDisconnect(dbConn1)
@@ -31,8 +31,6 @@ getPatientRunDetails <- function(patients, specimenManagementDBgroup='specimen_m
 
   d[order(d$runDate),]
 }
-
-
 
 
 
@@ -72,21 +70,22 @@ getRunDetails <- function(runID, specimenManagementDBgroup='specimen_management'
 }
 
 
-
-#' Disconnect all MySQL database connections.
+#' Terminate all MySQL database connections
 #'
-#' @return nothings
-#' 
+#' @return nothing
+#'
 #' @export
 disconnectAllDBs <- function(){
   invisible(lapply(DBI::dbListConnections(RMySQL::MySQL()), DBI::dbDisconnect))
 }
 
 
-#' Parse the sample replicate ids in a sequencing sample sheet.
+#' Summarize samples in sequencer sample sheet file.
 #'
-#' @return Data frame of unique samples including patient, cell type and time point information.
+#' Sample sheets are part of the Bushman group INSPIIRED pipeline.
 #' 
+#' @return Data frame including Trial, Patient, CellType, Timepoint fields.
+#'
 #' @export
 getSampleSheetDetails <- function(sampleSheetFile, specimenManagementDBgroup='specimen_management'){
   dbConn1  <- DBI::dbConnect(RMySQL::MySQL(), group=specimenManagementDBgroup)
@@ -102,22 +101,18 @@ getSampleSheetDetails <- function(sampleSheetFile, specimenManagementDBgroup='sp
 
   
 
-#' Retreive intSite data
+#' Retrieve intSite data
 #'
-#' Retreive inSite data for either a number of patients, sequencing runs or samples.
+#' Retrieve inSite data for either a number of patients, sequencing runs or samples.
 #'
-#' @param sampleDB.group Sample database connection group
-#' @param intSiteDB.group IntSite database connection group
-#' @param patients Vector of patient IDs for which to retrieve intSites.
 #' @param samples Vector of samples IDs for which to retrieve intSites.
-#' @param runIDs Vector of sequencing run ids for which to retrieve intSites.
-#' @param roundTimePoints Logical determining if time points should be rounded.
+#' @param sampleDB.group Sample database connection group.
+#' @param intSiteDB.group IntSite database connection group.
 #'
 #' @return A GRange object of intSites.
 #'
 #' @export
-getIntSiteData <- function(samples, sampleDB.group, intSiteDB.group,
-                           roundTimePoints=TRUE, runIDs=NULL){
+getDBgenomicFragments <- function(samples, sampleDB.group, intSiteDB.group){
   options(useFancyQuotes = FALSE)
 
   if(length(samples) == 0) stop('One or more sample ids must be provided.')
@@ -128,74 +123,83 @@ getIntSiteData <- function(samples, sampleDB.group, intSiteDB.group,
   intSiteSamples <- DBI::dbGetQuery(dbConn2, 'select * from samples')
   intSiteSamples$GTSP <- gsub('\\-\\d+$', '', intSiteSamples$sampleName)
   
-  # Retreive intSite db numeric sample ids.
   sampleIDs <- unique(base::subset(intSiteSamples, GTSP %in% samples)$sampleID)
   
   if(length(sampleIDs) == 0) stop('Error: no intSite sample ids have been selected.')
   
   replicateQuery <- paste('samples.sampleID in (', paste0(sampleIDs, collapse = ','), ')')
     
-  if(!is.null(runIDs)){
-    runIDs <- paste0('(miseqid in (', paste0(sQuote(runIDs), collapse = ','), ')) and ')
-  } else {
-    runIDs = ''
-  }
-  
   q <- sprintf("select position, chr, strand, breakpoint, count, refGenome,
                sampleName from sites left join samples on
                sites.sampleID = samples.sampleID
                left join pcrbreakpoints on
                pcrbreakpoints.siteID = sites.siteID
-               where %s (%s)", runIDs, replicateQuery)
-  
-  options(warn=-1)
+               where (%s)", replicateQuery)
+
   sampleData <- DBI::dbGetQuery(dbConn1, "select * from gtsp")
-  sites <- dbGetQuery(dbConn2, q)
-  options(warn=0)
+  sites <- DBI::dbGetQuery(dbConn2, q)
   
+  DBI::dbDisconnect(dbConn1)
+  DBI::dbDisconnect(dbConn2)
+
   if(nrow(sites) == 0) return(GRanges())
   
   sites$GTSP      <- as.character(sub('\\-\\d+', '', sites$sampleName))
   sites$patient   <- sampleData[match(sites$GTSP, sampleData$SpecimenAccNum), 'Patient']
   sites$timePoint <- sampleData[match(sites$GTSP, sampleData$SpecimenAccNum), 'Timepoint']
   sites$cellType  <- sampleData[match(sites$GTSP, sampleData$SpecimenAccNum), 'CellType']
-  
   sites$timePoint <- toupper(sites$timePoint)
   sites$timePoint <- gsub('_', '.', sites$timePoint)
   
-  sites$timePointType<- stringr::str_match(sites$timePoint, '[DMY]')
-  sites$timePointType[which(is.na(sites$timePointType))] <- 'X'
+  sites <- dplyr::bind_cols(sites, expandTimePoints(sites$timePoint))
   
-  sites <- dplyr::bind_rows(lapply(split(sites, sites$timePointType), function(x){
-    n <- as.numeric(stringr::str_match(x$timePoint, '[\\d\\.]+')) * ifelse(grepl('\\-', x$timePoint), -1, 1)
+  intSites <-
+    GenomicRanges::GRanges(seqnames = S4Vectors::Rle(sites$chr),
+                           ranges   = IRanges::IRanges(start = pmin(sites$position, sites$breakpoint),
+                                                       end   = pmax(sites$position, sites$breakpoint)),
+                           strand   = S4Vectors::Rle(sites$strand))
+  
+  sites <- dplyr::rename(sites, reads = count)
+  GenomicRanges::mcols(intSites) <- data.frame(dplyr::select(sites, refGenome, reads, patient, sampleName, 
+                                               GTSP, cellType, timePoint, timePointDays, timePointMonths))
+  intSites
+}
+
+
+
+
+#' Expand character time points to days and months.
+#'
+#' @param tps Character vector of timepoints, ie. c('D0', 'd10', 'M5', '-d20').
+#'
+#' @return Data frame with days and months. 
+#'
+#' @export
+expandTimePoints <- function(tps){
+  d <- tibble::tibble(tp = sub('_', '.', tps))
+  
+  d$timePointType <- stringr::str_match(base::toupper(d$tp), '[DMY]')
+  d$timePointType[which(is.na(d$timePointType))] <- 'X'
+  
+  d <- dplyr::bind_rows(lapply(split(d, d$timePointType), function(x){
+    n <- as.numeric(stringr::str_match(x$tp, '[\\d\\.]+')) * ifelse(grepl('\\-', x$tp), -1, 1)
     
     if(x$timePointType[1] == 'D'){
-      x$timePointMonths <- n / 30.4167
-      x$timePointDays   <- n
+      x$timePointMonths <- base::round(n / 30.4167, digits = 0)
+      x$timePointDays   <- base::round(n, digits = 0)
     } else if(x$timePointType[1] == 'M'){
-      x$timePointMonths <- n
-      x$timePointDays   <- n * 30.4167
+      x$timePointMonths <- base::round(n, digits = 0)
+      x$timePointDays   <- base::round(n * 30.4167, digits = 0)
     } else if(x$timePointType[1] == 'Y'){
-      x$timePointMonths <- n * 12
-      x$timePointDays   <- n * 365
+      x$timePointMonths <- base::round(n * 12, digits = 0)
+      x$timePointDays   <- base::round(n * 365, digits = 0)
     } else {
-      message('Warning - could not determine date unit for: ', x$timePointType[1])
+      message('Warning - could not determine date unit for: ', paste0(unique(x$timePoint), collapse = ', '))
       x$timePointMonths <- n
       x$timePointDays   <- n 
     }
     x
   }))
-  sites$timePointType <- NULL
   
-  if(roundTimePoints) sites$timePointMonths <- base::round(sites$timePointMonths)
-  
-  intSites <-GenomicRanges::GRanges(seqnames = S4Vectors::Rle(sites$chr),
-                         ranges = IRanges::IRanges(start = pmin(sites$position, sites$breakpoint),
-                                                   end   = pmax(sites$position, sites$breakpoint)),
-                         strand = S4Vectors::Rle(sites$strand))
-  
-  sites <- dplyr::rename(sites, reads = count)
-  mcols(intSites) <- data.frame(dplyr::select(sites, refGenome, reads, patient, sampleName, GTSP, 
-                                              cellType, timePoint, timePointDays, timePointMonths))
-  intSites
+  data.frame(dplyr::select(d, timePointMonths, timePointDays))
 }

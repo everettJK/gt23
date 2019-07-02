@@ -1,3 +1,16 @@
+#' Annotate genomic ranges
+#'
+#' Create a dataframe of sequencing run ids associated with 1 or more patient identifiers.
+#'
+#' @param query GRange object containing ranges from a genome supported by the gt23 package.
+#' @param subject gt23 genome specific gene boundary object.
+#' @param subject.exons gt23 genome specific gene exon object.
+#' @param side Which query boundary should be tested ('5p', '3p', 'either').
+#' @param geneList Case insensitive list of gene names to filter nearest features against.
+#'
+#' @return An updated query GRange object.
+#'
+#' @export
 nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, side='either', geneList=NULL){
   
   if(is.null(subject))       stop('subject parameter can not be NULL.')
@@ -126,15 +139,31 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
 
 
 
+#' Annotate genomic ranges
+#'
+#' Create a dataframe of sequencing run ids associated with 1 or more patient identifiers.
+#'
+#' @param d Data fram containing genomic ranges to be added to UCSC track.
+#' @param abundCuts Cut points for estimated abundance (estAbund) values. 
+#' @param posColors Color codes for binned abundances (positive integrations).
+#' @param negColors Color codes for binned abundances (positive integrations).
+#' @param title Track title.
+#' @param outputFile Track output file.
+#' @param visibility Track default visibility (0 - hide, 1 - dense, 2 - full, 3 - pack, and 4 - squish).
+#' @param position Deafult track position.
+#' @param padSite Number of NTs to pad sites with for increased visibility.
+#' @param siteLabel Text to appear next to sites, ie. 'Patient X, chr12+1052325'.
+#' 
+#' @return Nothing.
+#'
+#' @export
+createIntUCSCTrack <- function(d, abundCuts = c(5,10,50), 
+                                  posColors = c("#8C9DFF", "#6768E3", "#4234C7", "#1D00AB"),
+                                  negColors = c("#FF8C8C", "#E35D5D", "#C72E2E", "#AB0000"),
+                                  title = 'intSites', outputFile = 'track.ucsc', visibility = 1, 
+                                  position = 'chr7:127471196-127495720', padSite = 0,
+                                  siteLabel = NA){
 
-# UCSC visibility codes: 0 - hide, 1 - dense, 2 - full, 3 - pack, and 4 - squish. 
-createUCSCintSiteTrack <- function(d, abundCuts = c(5,10,50), 
-                                   posColors = c("#8C9DFF", "#6768E3", "#4234C7", "#1D00AB"),
-                                   negColors = c("#FF8C8C", "#E35D5D", "#C72E2E", "#AB0000"),
-                                   title='intSites', outputFile='track.ucsc', visibility = 1, 
-                                   position = 'chr7:127471196-127495720', padSite = 0,
-                                   siteLabel = NA){
-  
   # Check function inputs.
   if(length(posColors) != length(negColors)) 
     stop('The pos and neg color vectors are not the same length.')

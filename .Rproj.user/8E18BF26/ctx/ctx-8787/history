@@ -1,2 +1,0 @@
-setwd("~/releases/gt23")
-library(devtools)

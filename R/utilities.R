@@ -1,3 +1,103 @@
+#' Pretty print numbers with commas.
+#' 
+#' @param number Floating point of integer.
+#' 
+#' @export
+ppNum <- function (n) format(n, big.mark = ",", scientific = FALSE, trim = TRUE)
+
+
+#' Add position id, ie. chrX+231231 to GRange object.
+#'
+#' @param GRange Grange object.
+#'
+#' @export
+addPositionID <- function (gr) {
+  gr$posid <- paste0(seqnames(gr), strand(gr), start(flank(gr, -1, start = T)))
+  gr
+}
+
+
+#' Create a integration site location plot.
+#'
+#' @param gr GRange object.
+#' @param chromosomeLengths List with chromosome names which stores chromosomal lengths. 
+#' @param alpha Alpha value of integration tick marks.
+#' @param siteColor Color name or hex code for integration tick marks. 
+#'
+#' @export
+intSiteDistributionPlot<- function (gr, chromosomeLengths, alpha = 0.8, siteColor = "black") 
+{
+  library(GenomicRanges)
+  library(ggplot2)
+  library(gtools)
+  library(dplyr)
+  d <- GenomicRanges::as.data.frame(gr)[, c("start", "seqnames")]
+  d <- suppressWarnings(bind_rows(d, bind_rows(lapply(names(chromosomeLengths)[!names(chromosomeLengths) %in% 
+                                                                                 unique(as.character(d$seqnames))], function(x) {
+                                                                                   data.frame(start = 1, seqnames = x)
+                                                                                 }))))
+  d$seqnames <- factor(d$seqnames, levels = mixedsort(names(chromosomeLengths)))
+  d <- lapply(split(d, d$seqnames), function(x) {
+    lines <- data.frame(x = rep(x$start, each = 2), y = rep(c(0, 
+                                                              1), nrow(x)), g = rep(1:nrow(x), each = 2), seqnames = x$seqnames[1])
+    box <- data.frame(boxYmin = 0, boxYmax = 1, boxXmin = 1, 
+                      boxXmax = chromosomeLengths[[as.character(x$seqnames[1])]], 
+                      seqnames = x$seqnames[1])
+    list(lines = lines, box = box)
+  })
+  sites <- do.call(rbind, lapply(d, "[[", 1))
+  boxes <- do.call(rbind, lapply(d, "[[", 2))
+  ggplot() + theme_bw() + geom_line(data = sites, alpha = alpha, 
+                                    color = siteColor, aes(x, y, group = g)) + geom_rect(data = boxes, 
+                                                                                         color = "black", alpha = 0, mapping = aes(xmin = boxXmin, 
+                                                                                                                                   xmax = boxXmax, ymin = boxYmin, ymax = boxYmax)) + 
+    facet_grid(seqnames ~ ., switch = "y") + scale_x_continuous(expand = c(0, 
+                                                                           0)) + labs(x = "Genomic position", y = "") + theme(axis.text.y = element_blank(), 
+                                                                                                                              axis.ticks.y = element_blank(), panel.grid.major = element_blank(), 
+                                                                                                                              panel.grid.minor = element_blank(), panel.background = element_blank(), 
+                                                                                                                              panel.border = element_blank(), strip.text.y = element_text(size = 12, 
+                                                                                                                                                                                          angle = 180), strip.background = element_blank())
+}
+
+
+#' Abbreviate numbers with scientific suffixes.  
+#'
+#' @param number Floating point or integer.
+#' @param rounding Boolean, round provided number if TRUE.
+#' @param digits Number of significant digits to round number to if rounding set to TRUE.
+#'
+#' @export
+numShortHand <- function (number, rounding = F, digits = ifelse(rounding, NA, 2)) 
+{
+  # https://stackoverflow.com/questions/11340444/is-there-an-r-function-to-format-number-using-unit-prefix/29932218
+  
+  lut <- c(1e-24, 1e-21, 1e-18, 1e-15, 1e-12, 1e-09, 1e-06, 
+           0.001, 1, 1000, 1e+06, 1e+09, 1e+12, 1e+15, 1e+18, 1e+21, 
+           1e+24, 1e+27)
+  pre <- c("y", "z", "a", "f", "p", "n", "u", "m", "", "k", 
+           "M", "G", "T", "P", "E", "Z", "Y", NA)
+  ix <- findInterval(number, lut)
+  if (ix > 0 && ix < length(lut) && lut[ix] != 1) {
+    if (rounding == T && !is.numeric(digits)) {
+      sistring <- paste(round(number/lut[ix]), pre[ix])
+    }
+    else if (rounding == T || is.numeric(digits)) {
+      sistring <- paste(signif(number/lut[ix], digits), 
+                        pre[ix])
+    }
+    else {
+      sistring <- paste(number/lut[ix], pre[ix])
+    }
+  }
+  else {
+    sistring <- as.character(number)
+  }
+  sistring <- gsub("\\s", "", sistring)
+  return(sistring)
+}
+
+
+
 #' Standardize genomic fragments from intSite experiments using the gintools package.
 #'
 #' @param frags GenomicRange object containing genomic fragments where fragments with positive strands 
@@ -30,7 +130,9 @@ stdIntSiteFragments <- function(frags, CPUs = 10, countsCol = 'reads'){
 
 
    # Now that the fragment positions have been adjusted, merge ranges and re-tally the counts.
-   dplyr::group_by(data.frame(frags), cellType, timePoint, start, end, strand) %>%
+   # Here we sort by sampleName which is the replicate level sample id so that the same fragment found in two or more
+   # replicates are represeneted more than once.
+   dplyr::group_by(data.frame(frags), sampleName, start, end, strand) %>%
    dplyr::mutate(reads = sum(reads)) %>%
    dplyr::slice(1) %>%
    dplyr::ungroup() %>%
@@ -47,12 +149,14 @@ stdIntSiteFragments <- function(frags, CPUs = 10, countsCol = 'reads'){
 #' @export
 collapseReplicatesCalcAbunds <- function(f){
   # Conversion of GRange object to data frame creates width column.
+  # Here we sum replicate specific fragment widths to estimate abundances.
   f <- data.frame(f)
-  f$start <- ifelse(as.character(f$strand) == '+', f$start, f$end)
-  f$end   <- f$start
+  f$start       <- ifelse(as.character(f$strand) == '+', f$start, f$end)
+  f$end         <- f$start
+  f$sampleWidth <- paste0(f$sampleName, '/', f$width)
   dplyr::group_by(f, GTSP, posid) %>%
   dplyr::mutate(reads = sum(reads)) %>%
-  dplyr::mutate(estAbund = dplyr::n_distinct(width)) %>%
+  dplyr::mutate(estAbund = dplyr::n_distinct(sampleWidth)) %>%
   dplyr::slice(1) %>%
   dplyr::ungroup() %>%
   dplyr::select(-sampleName) %>%
@@ -142,7 +246,12 @@ defaultGenomeFileMappings <- function(){
      genome_refSeqExons <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$exons)))
      oncoGeneList       <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$oncoGeneList)))
      lymphomaGenesList  <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$lymphomaGenesList)))
- 
+     
+     # Gene list check.
+     message(paste0('oncoGeneList: ',      paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$oncoGeneList), ' - ', length(oncoGeneList), '  genes\n',
+                    'lymphomaGenesList: ', paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$lymphomaGenesList), ' - ', length(lymphomaGenesList), '  genes\n'))
+             
+     
      # Setup parallelization.
      cluster <- parallel::makeCluster(CPUs)
      parallel::clusterExport(cl=cluster, envir = environment(), varlist = c('CPUs', 'genome_refSeq', 'genome_refSeqExons', 'oncoGeneList', 'lymphomaGenesList'))
@@ -165,7 +274,7 @@ defaultGenomeFileMappings <- function(){
        
          # Nearest oncogene
          if(length(oncoGeneList) > 0){
-           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, geneList=gt23::humanOncoGenesList)
+           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, geneList = oncoGeneList)
            o <- o[order(o$n)]
        
            d <- data.frame(GenomicRanges::mcols(x2))
@@ -179,7 +288,7 @@ defaultGenomeFileMappings <- function(){
      
          # Nearest lymphoma gene
          if(length(lymphomaGenesList) > 0){
-           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, geneList=gt23::humanLymphomaGenesList)
+           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, geneList = lymphomaGenesList)
            o <- o[order(o$n)]
        
            d <- data.frame(GenomicRanges::mcols(x2))

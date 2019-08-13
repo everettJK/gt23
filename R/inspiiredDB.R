@@ -48,8 +48,8 @@ getPatientRunDetails <- function(patients, specimenManagementDBgroup='specimen_m
 getRunDetails <- function(runID, specimenManagementDBgroup='specimen_management', intsitesDBgroup='intsites_miseq'){
 
   # Create DB connections
-  dbConn1 <- DBI::dbConnect(MySQL(fetch.default.rec = Inf), group=specimenManagementDBgroup)
-  dbConn2 <- DBI::dbConnect(MySQL(fetch.default.rec = Inf), group=intsitesDBgroup)
+  dbConn1 <- DBI::dbConnect(RMySQL::MySQL(), group=specimenManagementDBgroup)
+  dbConn2 <- DBI::dbConnect(RMySQL::MySQL(), group=intsitesDBgroup)
 
   sampleDB <- DBI::dbGetQuery(dbConn1, 'select * from gtsp')
 

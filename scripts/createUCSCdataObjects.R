@@ -32,9 +32,13 @@ createRefSeqObjects <- function(genomeLabel, file, humanGeneFilter = FALSE){
   assign(paste0(genomeLabel, '.refSeqGenesGRanges'), g)
   assign(paste0(genomeLabel, '.refSeqGenesGRanges.exons'), e)
 
-  save(list = paste0(genomeLabel, '.refSeqGenesGRanges'), file = paste0('../data/', genomeLabel, '.refSeqGenesGRanges.RData'))
-  save(list = paste0(genomeLabel, '.refSeqGenesGRanges.exons'), file = paste0('../data/', genomeLabel, '.refSeqGenesGRanges.exons.RData'))
+  save(list = paste0(genomeLabel, '.refSeqGenesGRanges'), file = paste0('../data/', genomeLabel, '.refSeqGenesGRanges.RData'), compress = TRUE, compression_level = 9)
+  save(list = paste0(genomeLabel, '.refSeqGenesGRanges.exons'), file = paste0('../data/', genomeLabel, '.refSeqGenesGRanges.exons.RData'), compress = TRUE, compression_level = 9)
 }
+
+# Create special empty vector object for instances when no refGenomes are to be used.
+none <- vector(mode = "character", length = 0)
+save(none,  file = paste0('../data/none.RData'))
 
 createRefSeqObjects('hg38',    'annotations/geneReferences/June2019/hg38.refSeq.curated.txt.gz')
 createRefSeqObjects('hg18',    'annotations/geneReferences/June2019/hg18.refGene.txt.gz')
@@ -50,7 +54,7 @@ hg38.oreganno <- GenomicRanges::makeGRangesFromDataFrame(d, seqnames.field = 'V2
                                                          end.field = 'V4', strand.field = 'V6', 
                                                          starts.in.df.are.0based = TRUE)
 hg38.oreganno$id <- d$V7
-save(hg38.oreganno, file='../data/hg38.oreganno.RData')
+save(hg38.oreganno, file='../data/hg38.oreganno.RData', compress = TRUE, compression_level = 9)
 
 
 # Create human CCDS GRanges object.
@@ -63,6 +67,6 @@ hg38.ccds <- GenomicRanges::makeGRangesFromDataFrame(dplyr::bind_rows(lapply(1:n
              'start'    = unlist(strsplit(r$V10, ',')),
              'end'      = unlist(strsplit(r$V11, ',')))
 })), keep.extra.columns = TRUE)
-save(hg38.ccds, file='../data/hg38.ccds.RData')
+save(hg38.ccds, file='../data/hg38.ccds.RData', compress = TRUE, compression_level = 9)
 
 

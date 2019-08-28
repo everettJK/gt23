@@ -17,26 +17,7 @@ addPositionID <- function (gr) {
 }
 
 
-#' Check for genomic fragments with intSites found in 2 or more subjects.
-#'
-#' @param runID Sequencing runID which can be used by getRunDetails().
-#' @param specimenManagementDBgroup Sample database group id.
-#' @param intsitesDBgroup IntSite datbase group id.
-#'
-#' @export
-checkRunSubjectCrossContamination <- function(runID, specimenManagementDBgroup='specimen_management', intsitesDBgroup='intsites_miseq')
-{
-  gt23::getDBgenomicFragments(gt23::getRunDetails(runID)$GTSP,  specimenManagementDBgroup, intsitesDBgroup) %>% 
-  gt23::stdIntSiteFragments() %>%
-  data.frame() %>% 
-  unique() %>%
-  dplyr::group_by(posid) %>%
-  dplyr::summarise(nSubjects = n_distinct(patient)) %>%
-  dplyr::ungroup() %>%
-  dplyr::filter(nSubjects > 1) %>%
-  dplyr::left_join(dplyr::select(f, posid, width, reads, GTSP, patient, cellType, timePoint), by = 'posid') %>%
-  dplyr::select(-nSubjects)
-}
+
 
 #' Create a integration site location plot.
 #'

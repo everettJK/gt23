@@ -25,6 +25,7 @@ addPositionID <- function (gr) {
 #'
 #' @export
 checkRunSubjectCrossContamination <- function(runID, specimenManagementDBgroup='specimen_management', intsitesDBgroup='intsites_miseq')
+{
   gt23::getDBgenomicFragments(gt23::getRunDetails(runID)$GTSP,  specimenManagementDBgroup, intsitesDBgroup) %>% 
   gt23::stdIntSiteFragments() %>%
   data.frame() %>% 

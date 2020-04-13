@@ -115,30 +115,32 @@ stdIntSiteFragments <- function(frags, CPUs = 10, countsCol = 'reads'){
   cluster <- parallel::makeCluster(CPUs)
   parallel::clusterExport(cl = cluster, envir = environment(), varlist = c('countsCol'))
 
+  
+  # Standardize break points by sample.
+  frags <- unlist(GenomicRanges::GRangesList(parallel::parLapply(cluster, as.list(split(frags, frags$sampleName)), function(x){
+    gintools::refine_breakpoints(x, counts.col = countsCol)
+  })))
+  
+  
   # Standardize fragment start positions.
-  frags <- gintools::standardize_sites(frags, counts.col = countsCol)
+  frags <- gintools::standardize_sites(frags)
 
 
-   # Standardize break points by sample.
-   frags <- unlist(GenomicRanges::GRangesList(parallel::parLapply(cluster, as.list(split(frags, frags$sampleName)), function(x){
-              gintools::refine_breakpoints(x, counts.col = countsCol)
-            })))
-
-   # Stop the cluster.
+  # Stop the cluster.
    parallel::stopCluster(cluster)
 
-   # Create a postion id now that fragment boundaries have been standardized.
-   frags$posid <- paste0(GenomicRanges::seqnames(frags), GenomicRanges::strand(frags), GenomicRanges::start(GenomicRanges::flank(frags, -1, start = T)))
+  # Create a postion id now that fragment boundaries have been standardized.
+  frags$posid <- paste0(GenomicRanges::seqnames(frags), GenomicRanges::strand(frags), GenomicRanges::start(GenomicRanges::flank(frags, -1, start = T)))
 
 
-   # Now that the fragment positions have been adjusted, merge ranges and re-tally the counts.
-   # Here we sort by sampleName which is the replicate level sample id so that the same fragment found in two or more
-   # replicates are represeneted more than once.
-   dplyr::group_by(data.frame(frags), sampleName, start, end, strand) %>%
-   dplyr::mutate(reads = sum(reads)) %>%
-   dplyr::slice(1) %>%
-   dplyr::ungroup() %>%
-   GenomicRanges::makeGRangesFromDataFrame(keep.extra.columns = TRUE)
+  # Now that the fragment positions have been adjusted, merge ranges and re-tally the counts.
+  # Here we sort by sampleName which is the replicate level sample id so that the same fragment found in two or more
+  # replicates are represeneted more than once.
+  dplyr::group_by(data.frame(frags), sampleName, start, end, strand) %>%
+  dplyr::mutate(reads = sum(reads)) %>%
+  dplyr::slice(1) %>%
+  dplyr::ungroup() %>%
+  GenomicRanges::makeGRangesFromDataFrame(keep.extra.columns = TRUE)
 }
 
 
@@ -161,12 +163,40 @@ collapseReplicatesCalcAbunds <- function(f){
   dplyr::mutate(estAbund = dplyr::n_distinct(sampleWidth)) %>%
   dplyr::slice(1) %>%
   dplyr::ungroup() %>%
-  dplyr::select(-sampleName) %>%
+  dplyr::select(-sampleName, -sampleWidth) %>%
   dplyr::group_by(GTSP) %>%
   dplyr::mutate(relAbund = (estAbund / sum(estAbund))*100) %>%
   dplyr::ungroup() %>%
   GenomicRanges::makeGRangesFromDataFrame(keep.extra.columns = TRUE)
 }
+
+
+#' Estimate abundances by number of unique fragments associated with integration positions for each sample.
+#'
+#' @param f GRange object of standardized genomic fragments.
+#' @return GRange object of integration positions including estimated abundances.
+#' @importFrom magrittr '%>%'
+#' @export
+calcSampleAbunds <- function (f) 
+{
+  f <- data.frame(f)
+  f$start <- ifelse(as.character(f$strand) == "+", f$start,  f$end)
+  f$end <- f$start
+  f$sampleWidth <- paste0(f$sampleName, "/", f$width)
+  
+  dplyr::group_by(f, sampleName, posid) %>% 
+    dplyr::mutate(reads = sum(reads)) %>% 
+    dplyr::mutate(estAbund = dplyr::n_distinct(sampleWidth)) %>% 
+    dplyr::slice(1) %>% 
+    dplyr::ungroup() %>% 
+    dplyr::select(-sampleWidth) %>% 
+    dplyr::group_by(sampleName) %>% 
+    dplyr::mutate(relAbund = (estAbund/sum(estAbund)) * 100) %>% 
+    dplyr::ungroup() %>% 
+    GenomicRanges::makeGRangesFromDataFrame(keep.extra.columns = TRUE)
+}
+
+
   
  
 
@@ -192,6 +222,10 @@ defaultGenomeFileMappings <- function(){
                          'exons'             = 'mm9.refSeqGenesGRanges.exons',
                          'oncoGeneList'      = 'mm9.oncoGeneList',
                          'lymphomaGenesList' = 'none'),
+        'susScr3' = list('genes'             = 'susScr3.refSeqGenesGRanges', 
+                         'exons'             = 'susScr3.refSeqGenesGRanges.exons',
+                         'oncoGeneList'      = 'none',
+                         'lymphomaGenesList' = 'none'),
         'canFam3' = list('genes'             = 'canFam3.humanXeno.refSeqGenesGRanges', 
                          'exons'             = 'canFam3.humanXeno.refSeqGenesGRanges.exons',
                          'oncoGeneList'      = 'hg38.oncoGeneList',
@@ -199,7 +233,11 @@ defaultGenomeFileMappings <- function(){
         'macFas5' = list('genes'             = 'macFas5.humanXeno.refSeqGenesGRanges', 
                          'exons'             = 'macFas5.humanXeno.refSeqGenesGRanges.exons',
                          'oncoGeneList'      = 'hg38.oncoGeneList',
-                         'lymphomaGenesList' = 'hg38.lymphomaGenesList'))
+                         'lymphomaGenesList' = 'hg38.lymphomaGenesList'),
+        'Kingella_kingae_KKKWG1' = list('genes'             = 'Kingella_kingae_KKKWG1.refSeqGenesGRanges', 
+                                        'exons'             = 'Kingella_kingae_KKKWG1.refSeqGenesGRanges.exons',
+                                        'oncoGeneList'      = 'none',
+                                        'lymphomaGenesList' = 'none'))
         
  }
  

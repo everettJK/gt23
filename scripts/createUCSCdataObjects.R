@@ -45,6 +45,7 @@ createRefSeqObjects('hg18',    'annotations/geneReferences/June2019/hg18.refGene
 createRefSeqObjects('mm9',     'annotations/geneReferences/June2019/mm9.refGene.txt.gz')
 createRefSeqObjects('susScr3', 'annotations/geneReferences/June2019/susScr3.refGene.txt.gz')
 createRefSeqObjects('macFas5', 'annotations/geneReferences/June2019/macFas5.refGene.txt.gz')
+createRefSeqObjects('canFam3', 'annotations/geneReferences/June2019/canFam3.refGene.txt.gz')
 createRefSeqObjects('canFam3.humanXeno', 'annotations/geneReferences/June2019/canFam3.xenoRefGene.txt.gz', humanGeneFilter = TRUE)
 createRefSeqObjects('macFas5.humanXeno', 'annotations/geneReferences/June2019/macFas5.xenoRefGene.txt.gz', humanGeneFilter = TRUE)
 

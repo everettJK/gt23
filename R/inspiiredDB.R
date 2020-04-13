@@ -177,6 +177,7 @@ getDBgenomicFragments <- function(samples, sampleDB.group, intSiteDB.group){
 #' @export
 expandTimePoints <- function(tps){
   d <- tibble::tibble(tp = sub('_', '.', tps))
+  d$n <- 1:nrow(d)
   
   d$timePointType <- stringr::str_match(base::toupper(d$tp), '[DMY]')
   d$timePointType[which(is.na(d$timePointType))] <- 'X'
@@ -201,5 +202,5 @@ expandTimePoints <- function(tps){
     x
   }))
   
-  data.frame(dplyr::select(d, timePointMonths, timePointDays))
+  data.frame(dplyr::arrange(d, n) %>% dplyr::select(timePointMonths, timePointDays))
 }

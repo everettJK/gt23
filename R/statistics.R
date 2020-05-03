@@ -74,7 +74,12 @@ scanStats <- function(gr1, gr2, gr1.label = 'A', gr2.label = 'B', kvals = '15L:3
 }
 
 
-
+#' Run a number of combination of settings for geneRxCluster scan statistics.
+#' Bioinformatics. 2014 Jun 1;30(11):1493-500. 
+#' 
+#' @return Data frame of clusters statistics from each combination of paramteres tested. 
+#'
+#' @export
 tuneScanStatistics <- function(A, B, CPUs=25, 
                                minWindow=10, maxWindow=30, windowStep=5, 
                                minProb=0.75, maxProb=0.95, probStep=0.025, 
@@ -103,18 +108,19 @@ tuneScanStatistics <- function(A, B, CPUs=25,
   }))
   
   t$s <- ceiling(seq_along(1:nrow(t))/(nrow(t)/CPUs))
-  save.image(file='tuneData.RData')
-  library(parallel)
-  cluster <- makeCluster(CPUs)
-  t2 <- do.call(rbind, parLapply(cluster, split(t, t$s), function(x){
+  save(list = ls(all.names = TRUE), file='tuneData.RData', envir = environment())
+
+  cluster <- parallel::makeCluster(CPUs)
+  t2 <- do.call(rbind, parallel::parLapply(cluster, split(t, t$s), function(x){
     load('tuneData.RData')
+    
     do.call(rbind, lapply(1:nrow(x), function(i){
-      scan <- scanStats(A,
-                        B,
-                        kvals=x[i,]$kvals, 
-                        nperm='100',
-                        cutpt.filter.expr=x[i,]$cutpt.filter.expr,
-                        cutpt.tail.expr=x[i,]$cutpt.tail.expr)
+      message('chunk ', x$s[1], ' parameter row ', i)
+      scan <- gt23::scanStats(A, B,
+                              kvals=x[i,]$kvals, 
+                              nperm='100',
+                              cutpt.filter.expr=x[i,]$cutpt.filter.expr,
+                              cutpt.tail.expr=x[i,]$cutpt.tail.expr)
       
       data.frame(kvals=x[i,]$kvals,
                  cutpt.filter.expr=x[i,]$cutpt.filter.expr,

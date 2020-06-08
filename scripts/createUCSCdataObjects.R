@@ -25,8 +25,8 @@ createRefSeqObjects <- function(genomeLabel, file, humanGeneFilter = FALSE){
        unnest(exonStarts = strsplit(exonStarts, ","), exonEnds = strsplit(exonEnds, ",")) %>%
        mutate(name = paste('exon', 1:n())) %>%
        ungroup() %>%
-       makeGRangesFromDataFrame(seqnames.field = 'chrom', start.field = 'txStart',
-                                end.field = 'txEnd', strand.field = 'strand',
+       makeGRangesFromDataFrame(seqnames.field = 'chrom', start.field = 'exonStarts',
+                                end.field = 'exonEnds', strand.field = 'strand',
                                 keep.extra.columns = TRUE)
 
   assign(paste0(genomeLabel, '.refSeqGenesGRanges'), g)

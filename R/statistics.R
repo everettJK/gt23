@@ -81,9 +81,9 @@ scanStats <- function(gr1, gr2, gr1.label = 'A', gr2.label = 'B', kvals = '15L:3
 #'
 #' @export
 tuneScanStatistics <- function(A, B, CPUs=25, 
-                               minWindow=10, maxWindow=30, windowStep=5, 
+                               minWindow=5, maxWindow=100, windowStep=5, 
                                minProb=0.75, maxProb=0.95, probStep=0.025, 
-                               minTarget=10, maxTarget=25, targetStep=5){
+                               minTarget=5, maxTarget=100, targetStep=5){
   
   t <- do.call(rbind, lapply(minWindow:(maxWindow - minWindow), function(i){
     r <- data.frame()
@@ -112,25 +112,31 @@ tuneScanStatistics <- function(A, B, CPUs=25,
 
   cluster <- parallel::makeCluster(CPUs)
   t2 <- do.call(rbind, parallel::parLapply(cluster, split(t, t$s), function(x){
+  #t2 <- do.call(rbind, lapply(split(t, t$s), function(x){  
     load('tuneData.RData')
     
     do.call(rbind, lapply(1:nrow(x), function(i){
       message('chunk ', x$s[1], ' parameter row ', i)
-      scan <- gt23::scanStats(A, B,
-                              kvals=x[i,]$kvals, 
-                              nperm='100',
-                              cutpt.filter.expr=x[i,]$cutpt.filter.expr,
-                              cutpt.tail.expr=x[i,]$cutpt.tail.expr)
       
-      data.frame(kvals=x[i,]$kvals,
-                 cutpt.filter.expr=x[i,]$cutpt.filter.expr,
-                 cutpt.tail.expr=x[i,]$cutpt.tail.expr,
-                 FDR=gRxSummary(scan)$FDR,
-                 totalClusters=gRxSummary(scan)$Clusters_Discovered,
-                 Aclusters=length(subset(scan, clusterSource=='A')),
-                 Bclusters=length(subset(scan, clusterSource=='B')),
-                 avgClusterWidth=(sum(width(scan)) / length(scan)))
-      
+      tryCatch({
+                  scan <- gt23::scanStats(A, B,
+                                          kvals=x[i,]$kvals, 
+                                          nperm='1000',
+                                          cutpt.filter.expr=x[i,]$cutpt.filter.expr,
+                                          cutpt.tail.expr=x[i,]$cutpt.tail.expr)
+                         
+                  data.frame(kvals=x[i,]$kvals,
+                             cutpt.filter.expr=x[i,]$cutpt.filter.expr,
+                             cutpt.tail.expr=x[i,]$cutpt.tail.expr,
+                             FDR=gRxSummary(scan)$FDR,
+                             totalClusters=gRxSummary(scan)$Clusters_Discovered,
+                             Aclusters=length(subset(scan, clusterSource=='A')),
+                             Bclusters=length(subset(scan, clusterSource=='B')),
+                             avgClusterWidth=(sum(width(scan)) / length(scan)))
+               }, 
+               error = function(cond) {
+                         return(data.frame())
+               })
     }))
   }))
   stopCluster(cluster)

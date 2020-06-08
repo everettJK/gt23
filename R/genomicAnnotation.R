@@ -17,6 +17,8 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
   if(is.null(subject.exons)) stop('subject.exons parameter can not be NULL.')
   if(! is.null(geneList))    subject <- GenomicRanges::subset(subject, toupper(name2) %in% toupper(geneList))
   
+  message('Starting nearestGenomicFeature() -- subject contains ', length(ranges), ', subject.exon contains ', length(subject.exons), ' ranges.')
+  
   # If side is not set to either, collapse the subject ranges to single positions
   if (side %in% c("5p", "3p", "midpoint")) {
     options(warn=-1)
@@ -107,6 +109,7 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
   query.df$nearestFeatureBoundary <- NULL
   
   # In exon
+  browser()
   o <- suppressWarnings(GenomicRanges::findOverlaps(query, subject.exons, select='all', ignore.strand=TRUE, type='any'))
   if(length(o) > 0){
     a <- dplyr::group_by(data.frame(o), queryHits) %>% 

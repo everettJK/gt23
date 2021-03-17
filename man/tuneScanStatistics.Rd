@@ -5,9 +5,9 @@
 \title{Run a number of combination of settings for geneRxCluster scan statistics.
 Bioinformatics. 2014 Jun 1;30(11):1493-500.}
 \usage{
-tuneScanStatistics(A, B, CPUs = 25, minWindow = 10, maxWindow = 30,
+tuneScanStatistics(A, B, CPUs = 25, minWindow = 5, maxWindow = 100,
   windowStep = 5, minProb = 0.75, maxProb = 0.95, probStep = 0.025,
-  minTarget = 10, maxTarget = 25, targetStep = 5)
+  minTarget = 5, maxTarget = 100, targetStep = 5)
 }
 \value{
 Data frame of clusters statistics from each combination of paramteres tested.

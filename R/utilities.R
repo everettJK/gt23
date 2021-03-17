@@ -267,7 +267,8 @@ defaultGenomeFileMappings <- function(){
  #' @return GRange object updated with genomic feature annotations.
  #'
  #' @export
- annotateIntSites <- function(sites, CPUs = 20, genomeFileMap = NULL){
+ annotateIntSites <- function(sites, CPUs = 20, genomeFileMap = NULL, oncoGeneList = NULL,
+                              oncoGeneListSide = 'either', lymphomaGenesListSide = 'either'){
    
    if(is.null(genomeFileMap)) genomeFileMap <- gt23::defaultGenomeFileMappings()
    gt23::validateGenomeFileMap(genomeFileMap)
@@ -284,7 +285,13 @@ defaultGenomeFileMappings <- function(){
                                                          
      genome_refSeq      <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$genes)))
      genome_refSeqExons <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$exons)))
-     oncoGeneList       <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$oncoGeneList)))
+     
+     if(is.null(oncoGeneList)){
+        oncoGeneList <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$oncoGeneList)))
+     } else {
+       message('Using custom oncogene list with ', dplyr::n_distinct(oncoGeneList), ' gene names.')
+     }
+     
      lymphomaGenesList  <- eval(parse(text = paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$lymphomaGenesList)))
      
      # Gene list check.
@@ -292,15 +299,18 @@ defaultGenomeFileMappings <- function(){
                     'lymphomaGenesList: ', paste0('gt23::', genomeFileMap[[x$refGenome[1]]]$lymphomaGenesList), ' - ', length(lymphomaGenesList), '  genes\n'))
              
      
+     
      # Setup parallelization.
      cluster <- parallel::makeCluster(CPUs)
      parallel::clusterExport(cl=cluster, envir = environment(), varlist = c('CPUs', 'genome_refSeq', 'genome_refSeqExons', 'oncoGeneList', 'lymphomaGenesList'))
     
      # Create a splitting vector for parallelization.
      x$s <- dplyr::ntile(seq_along(x), CPUs)
+     x$s <- dplyr::ntile(seq_along(x), CPUs)
      names(x) <- NULL
      
      x <- unlist(GenomicRanges::GRangesList(parallel::parLapply(cluster, split(x, x$s), function(x2){
+     ###x <- unlist(GenomicRanges::GRangesList(lapply(split(x, x$s), function(x2){
           library(GenomicRanges)
           library(gt23)
           library(dplyr)
@@ -314,9 +324,10 @@ defaultGenomeFileMappings <- function(){
        
          # Nearest oncogene
          if(length(oncoGeneList) > 0){
-           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, geneList = oncoGeneList)
+           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, 
+                                            geneList = oncoGeneList, subjectSide = oncoGeneListSide)
            o <- o[order(o$n)]
-       
+           
            d <- data.frame(GenomicRanges::mcols(x2))
            d <- d[order(d$n),]
            stopifnot(all(o$n == d$n))
@@ -328,7 +339,8 @@ defaultGenomeFileMappings <- function(){
      
          # Nearest lymphoma gene
          if(length(lymphomaGenesList) > 0){
-           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, geneList = lymphomaGenesList)
+           o <- gt23::nearestGenomicFeature(x2, subject = genome_refSeq, subject.exons = genome_refSeqExons, 
+                                            geneList = lymphomaGenesList, subjectSide = lymphomaGenesListSide)
            o <- o[order(o$n)]
        
            d <- data.frame(GenomicRanges::mcols(x2))

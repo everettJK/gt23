@@ -5,7 +5,7 @@
 \title{Annotate genomic ranges}
 \usage{
 nearestGenomicFeature(query, subject = NULL, subject.exons = NULL,
-  side = "either", geneList = NULL)
+  subjectSide = "either", geneList = NULL)
 }
 \arguments{
 \item{query}{GRange object containing ranges from a genome supported by the gt23 package.}
@@ -14,7 +14,7 @@ nearestGenomicFeature(query, subject = NULL, subject.exons = NULL,
 
 \item{subject.exons}{gt23 genome specific gene exon object.}
 
-\item{side}{Which query boundary should be tested ('5p', '3p', 'either').}
+\item{subjectSide}{Which subject boundary should be tested ('start', 'end', 'midpoint', 'either').}
 
 \item{geneList}{Case insensitive list of gene names to filter nearest features against.}
 }

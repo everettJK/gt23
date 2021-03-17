@@ -4,7 +4,8 @@
 \alias{annotateIntSites}
 \title{Calculate nearest genomic and onocogene features.}
 \usage{
-annotateIntSites(sites, CPUs = 20, genomeFileMap = NULL)
+annotateIntSites(sites, CPUs = 20, genomeFileMap = NULL,
+  oncoGeneListSide = "either", lymphomaGenesListSide = "either")
 }
 \value{
 GRange object updated with genomic feature annotations.

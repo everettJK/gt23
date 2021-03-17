@@ -5,13 +5,13 @@
 #' @param query GRange object containing ranges from a genome supported by the gt23 package.
 #' @param subject gt23 genome specific gene boundary object.
 #' @param subject.exons gt23 genome specific gene exon object.
-#' @param side Which query boundary should be tested ('5p', '3p', 'either').
+#' @param subjectSide Which subject boundary should be tested ('start', 'end', 'midpoint', 'either').
 #' @param geneList Case insensitive list of gene names to filter nearest features against.
 #'
 #' @return An updated query GRange object.
 #'
 #' @export
-nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, side='either', geneList=NULL){
+nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, subjectSide = 'either', geneList = NULL){
   
   if(is.null(subject))       stop('subject parameter can not be NULL.')
   if(is.null(subject.exons)) stop('subject.exons parameter can not be NULL.')
@@ -19,12 +19,13 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
   
   message('Starting nearestGenomicFeature() -- subject contains ', length(ranges), ', subject.exon contains ', length(subject.exons), ' ranges.')
   
-  # If side is not set to either, collapse the subject ranges to single positions
-  if (side %in% c("5p", "3p", "midpoint")) {
+  # If subjectSide is not set to either, collapse the subject ranges to single positions
+  if (subjectSide %in% c("start", "end", "midpoint")) {
+    message('subjectSide parameter: ', subjectSide)
     options(warn=-1)
-    if (side == "5p") subject <- GenomicRanges::flank(subject, width = -1)
-    if (side == "3p") subject <- GenomicRanges::flank(subject, width = -1, start = FALSE)
-    if (side == "midpoint") ranges(subject) <- IRanges(mid(ranges(subject)), width = 1)
+    if (subjectSide == "start") subject <- GenomicRanges::flank(subject, width = -1)
+    if (subjectSide == "end")   subject <- GenomicRanges::flank(subject, width = -1, start = FALSE)
+    if (subjectSide == "midpoint") ranges(subject) <- IRanges(mid(ranges(subject)), width = 1)
     options(warn=0)
   }
   
@@ -67,13 +68,16 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
          dplyr::distinct() %>% 
          data.frame()
     
-    query.df[a$queryHits,]$nearestFeature       <- a$gene
-    query.df[a$queryHits,]$nearestFeatureStrand <- a$strand
-    query.df[a$queryHits,]$nearestFeatureStart  <- a$hitStart
-    query.df[a$queryHits,]$nearestFeatureEnd    <- a$hitEnd
+    if(nrow(a) > 0){
+      query.df[a$queryHits,]$nearestFeature       <- a$gene
+      query.df[a$queryHits,]$nearestFeatureStrand <- a$strand
+      query.df[a$queryHits,]$nearestFeatureStart  <- a$hitStart
+      query.df[a$queryHits,]$nearestFeatureEnd    <- a$hitEnd
+    }
   }
   
   o <- suppressWarnings(GenomicRanges::findOverlaps(query, subject, select='all', ignore.strand=TRUE, type='any'))
+  
   if(length(o) > 0){
     a <- dplyr::group_by(data.frame(o), queryHits) %>% 
       dplyr::mutate(gene   = paste(unique(subject.df[subjectHits,]$name2), collapse=',')) %>% 
@@ -82,10 +86,11 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
       dplyr::distinct() %>% 
       data.frame()
     
-    query.df[a$queryHits,]$inFeature <- TRUE
+    if(nrow(a) > 0) query.df[a$queryHits,]$inFeature <- TRUE
   }
   
   o <- suppressWarnings(GenomicRanges::distanceToNearest(query,  subject, select='all', ignore.strand=TRUE))
+  
   if(length(o) > 0){
     a <- dplyr::group_by(data.frame(o), queryHits) %>% 
       dplyr::top_n(-1, distance) %>%
@@ -93,9 +98,13 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
       dplyr::select(queryHits, distance) %>% 
       dplyr::distinct() %>% 
       data.frame()
-    query.df[a$queryHits,]$nearestFeatureDist <- a$distance
+    
+    
+    if(nrow(a) > 0) query.df[a$queryHits,]$nearestFeatureDist <- a$distance
   }
   
+  
+  # JKE
   query.df$nearestFeatureBoundary <- ifelse(abs(query.df$start - query.df$nearestFeatureStart) > 
                                               abs(query.df$start - query.df$nearestFeatureEnd),   
                                             query.df$nearestFeatureEnd,  
@@ -108,9 +117,9 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
   query.df$nearestFeatureEnd      <- NULL
   query.df$nearestFeatureBoundary <- NULL
   
-  # In exon
-  browser()
+  # In exon THIS ???
   o <- suppressWarnings(GenomicRanges::findOverlaps(query, subject.exons, select='all', ignore.strand=TRUE, type='any'))
+ 
   if(length(o) > 0){
     a <- dplyr::group_by(data.frame(o), queryHits) %>% 
       dplyr::mutate(gene   = paste(unique(subject.exons.df[subjectHits,]$name2), collapse=',')) %>% 
@@ -120,21 +129,18 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
       data.frame()
     
     #query.df[a$queryHits,]$inFeatureExon  <- a$gene
-    query.df[a$queryHits,]$inFeatureExon  <- TRUE
+    if(nrow(a) > 0) query.df[a$queryHits,]$inFeatureExon  <- TRUE
   }
   
   # In TU ort
   # There may be cases where a site overlaps two or more features which have the sampe orientation.
   # ie. +,+,+ and we want to reduce these down to a single unique sign for comparison.
-  a <- query.df[is.na(query.df$inFeature),]  
-  b <- query.df[! is.na(query.df$inFeature),]
-  
-  if(nrow(a) > 0 && nrow(b) > 0){
-    b$nearestFeatureStrandCmp <- unlist(lapply(strsplit(b$nearestFeatureStrand, ','), function(x){ paste(unique(x), collapse=',')}))
-    b$inFeatureSameOrt <- b$strand == b$nearestFeatureStrandCmp
-    b$nearestFeatureStrandCmp <- NULL
-    query.df <- dplyr::bind_rows(a, b)
-  }
+
+  query.df$nearestFeatureStrand2 <- unlist(lapply(strsplit(query.df$nearestFeatureStrand, ','), function(x){ paste(unique(x), collapse=',')}))
+  i <- grepl(',', query.df$nearestFeatureStrand2)
+  if(any(i)) query.df[i,]$nearestFeatureStrand2 <- '*'
+  query.df$inFeatureSameOrt <- query.df$strand == query.df$nearestFeatureStrand2
+  query.df$nearestFeatureStrand2 <- NULL
   
   GenomicRanges::makeGRangesFromDataFrame(query.df, keep.extra.columns = TRUE)
 }

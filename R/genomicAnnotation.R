@@ -15,7 +15,7 @@ nearestGenomicFeature <- function(query, subject = NULL, subject.exons = NULL, s
   
   if(is.null(subject))       stop('subject parameter can not be NULL.')
   if(is.null(subject.exons)) stop('subject.exons parameter can not be NULL.')
-  if(! is.null(geneList))    subject <- GenomicRanges::subset(subject, toupper(name2) %in% toupper(geneList))
+  if(! is.null(geneList))    subject <- subset(subject, toupper(name2) %in% toupper(geneList))
   
   message('Starting nearestGenomicFeature() -- subject contains ', length(ranges), ', subject.exon contains ', length(subject.exons), ' ranges.')
   
